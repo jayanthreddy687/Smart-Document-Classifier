@@ -106,6 +106,10 @@ def upload_document():
     try:
         # Read file content
         file_content = file.read()
+        
+        # Check if file is empty
+        if not file_content.strip():
+            return jsonify({'error': 'File is empty. Please upload a file with content.'}), 400
 
         # Upload to S3
         s3_key = f"documents/{datetime.now(UTC).timestamp()}_{secure_filename(file.filename)}"
