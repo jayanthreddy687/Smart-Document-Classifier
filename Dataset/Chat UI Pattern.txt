@@ -1,0 +1,28 @@
+Chat is a bad UI pattern for development tools
+Code forces humans to be precise. That’s good—computers need precision. But it also forces humans to think like machines.
+
+For decades we tried to fix this by making programming more human-friendly. Higher-level languages. Visual interfaces. Each step helped, but we were still translating human thoughts into computer instructions.
+
+AI was supposed to change everything. Finally, plain English could be a programming language—one everyone already knows. No syntax. No rules. Just say what you want.
+
+The first wave of AI coding tools squandered this opportunity. They make flashy demos but produce garbage software. People call them “great for prototyping,” which means “don’t use this for anything real.”
+
+Many blame the AI models, saying we just need them to get smarter. This is wrong. Yes, better AI will make better guesses about what you mean. But when you’re building serious software, you don’t want guesses—even smart ones. You want to know exactly what you’re building.
+
+Current AI tools pretend writing software is like having a conversation. It’s not. It’s like writing laws. You’re using English, but you’re defining terms, establishing rules, and managing complex interactions between everything you’ve said.
+
+Try writing a tax code in chat messages. You can’t. Even simple tax codes are too complex to keep in your head. That’s why we use documents—they let us organize complexity, reference specific points, and track changes systematically. Chat reduces you to memory and hope.
+
+This is the core problem. You can’t build real software without being precise about what you want. Every successful programming tool in history reflects this truth. AI briefly fooled us into thinking we could just chat our way to working software.
+
+We can’t. You don’t program by chatting. You program by writing documents.
+
+When your intent is in a document instead of scattered across a chat log, English becomes a real programming language:
+
+You can see your whole system at once
+You can clarify and improve your intent
+You can track changes properly
+Teams can work on the system together
+Requirements become their own quality checks
+Changes start from clear specifications
+The first company to get this will own the next phase of AI development tools. They’ll build tools for real software instead of toys. They’ll make everything available today look like primitive experiments.
