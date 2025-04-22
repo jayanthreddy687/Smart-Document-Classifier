@@ -25,7 +25,7 @@ You can try the application at: [Smart Document Classifier](https://smart-docume
 - Document history tracking
 - Download classified documents
 - Secure file storage using AWS S3
-- Modern, responsive UI with dark mode support
+- Modern, responsive UI
 - Detailed classification statistics and analytics
 
 
