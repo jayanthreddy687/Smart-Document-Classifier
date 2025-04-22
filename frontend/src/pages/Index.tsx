@@ -44,9 +44,8 @@ const Index = () => {
           errorMessage = 'Request timed out. Please try again.';
         } else if (error.message.includes('file type')) {
           errorMessage = 'Invalid file type. Please upload a PDF, DOCX, or TXT file.';
-        } else if (error.message.includes('size')) {
-          errorMessage = 'File size too large. Please upload a smaller file.';
-        } else if (error.message.includes('empty')) {
+        }
+        else if (error.message.includes('empty')) {
           errorMessage = 'File is empty. Please upload a file with content.';
         }
       }

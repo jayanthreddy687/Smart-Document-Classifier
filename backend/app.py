@@ -98,9 +98,6 @@ def upload_document():
     if file_ext not in allowed_types:
         return jsonify({'error': f'File type not allowed. Supported types: {", ".join(allowed_types)}'}), 400
 
-    # Validate file size (e.g., 10MB limit)
-    if len(file.read()) > 10 * 1024 * 1024:  # 10MB in bytes
-        return jsonify({'error': 'File size too large. Maximum size is 10MB'}), 400
     file.seek(0)  # Reset file pointer
 
     try:
