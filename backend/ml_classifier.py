@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from config import settings
 import numpy as np
 from collections import Counter
-from requests.exceptions import RequestException, Timeout, ConnectionError
+from requests.exceptions import RequestException, ConnectionError
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -186,7 +186,6 @@ class DocumentClassifier:
                 self.api_url, 
                 headers=self.headers, 
                 json=payload,
-                timeout=30  # 30 second timeout
             )
             
             # Log the response status
@@ -222,7 +221,7 @@ class DocumentClassifier:
                 logger.error(f"Raw response: {response.text[:200]}...")  # Log first 200 chars of response
                 raise ValueError("Failed to parse API response")
             
-        except (Timeout, ConnectionError, requests.exceptions.HTTPError) as e:
+        except ( ConnectionError, requests.exceptions.HTTPError) as e:
             logger.error(f"Hugging Face API error: {str(e)}")
             raise RequestException("Issue with Hugging Face API. Please try again.")
         except Exception as e:
