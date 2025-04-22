@@ -9,6 +9,10 @@ from dotenv import load_dotenv
 from config import settings
 import numpy as np
 from collections import Counter
+from requests.exceptions import RequestException, Timeout, ConnectionError
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class DocumentClassifier:
     def __init__(self, api_token: Optional[str] = None, model_name: str = "facebook/bart-large-mnli"):
@@ -35,7 +39,7 @@ class DocumentClassifier:
             "General Article",
             "Other"
         ]
-        logging.info(f"Initialized DocumentClassifier with model: {model_name}")
+        logger.info(f"Initialized DocumentClassifier with model: {model_name}")
 
     @property
     def categories(self) -> List[str]:
@@ -52,28 +56,48 @@ class DocumentClassifier:
             
         Returns:
             Extracted text as string
+            
+        Raises:
+            ValueError: If file type is not supported
+            IOError: If file content cannot be read
         """
         try:
             if file_type.lower() == '.txt':
-                return file_content.decode('utf-8')
+                try:
+                    return file_content.decode('utf-8')
+                except UnicodeDecodeError:
+                    logger.error("Failed to decode text file as UTF-8")
+                    raise IOError("Failed to read text file. Please ensure it is UTF-8 encoded.")
             
             elif file_type.lower() == '.docx':
-                doc_stream = io.BytesIO(file_content)
-                doc = docx.Document(doc_stream)
-                return ' '.join([paragraph.text for paragraph in doc.paragraphs])
+                try:
+                    doc_stream = io.BytesIO(file_content)
+                    doc = docx.Document(doc_stream)
+                    return ' '.join([paragraph.text for paragraph in doc.paragraphs])
+                except Exception as e:
+                    logger.error(f"Error reading DOCX file: {str(e)}")
+                    raise IOError("Failed to read DOCX file. Please ensure it is a valid Word document.")
             
             elif file_type.lower() == '.pdf':
-                pdf_stream = io.BytesIO(file_content)
-                pdf_reader = PyPDF2.PdfReader(pdf_stream)
-                text = ''
-                for page in pdf_reader.pages:
-                    text += page.extract_text() + ' '
-                return text.strip()
+                try:
+                    pdf_stream = io.BytesIO(file_content)
+                    pdf_reader = PyPDF2.PdfReader(pdf_stream)
+                    if len(pdf_reader.pages) == 0:
+                        raise ValueError("PDF file is empty")
+                    text = ''
+                    for page in pdf_reader.pages:
+                        text += page.extract_text() + ' '
+                    if not text.strip():
+                        raise ValueError("No text content found in PDF")
+                    return text.strip()
+                except Exception as e:
+                    logger.error(f"Error reading PDF file: {str(e)}")
+                    raise IOError("Failed to read PDF file. Please ensure it is a valid PDF document.")
             
             else:
-                raise ValueError(f"Unsupported file type: {file_type}")
+                raise ValueError(f"Unsupported file type: {file_type}. Supported types are: .txt, .docx, .pdf")
         except Exception as e:
-            logging.error(f"Error extracting text from file: {str(e)}")
+            logger.error(f"Error extracting text from file: {str(e)}")
             raise
 
     def create_sliding_windows(self, text: str, window_size: int = 1024, overlap: int = 200) -> List[Tuple[str, int, int]]:
@@ -139,8 +163,15 @@ class DocumentClassifier:
             
         Returns:
             API response as dictionary
+            
+        Raises:
+            RequestException: If API request fails
+            ValueError: If response is invalid
         """
         try:
+            if not text.strip():
+                raise ValueError("Empty text provided for classification")
+
             payload = {
                 "inputs": text,
                 "parameters": {
@@ -148,12 +179,38 @@ class DocumentClassifier:
                 }
             }
             
-            response = requests.post(self.api_url, headers=self.headers, json=payload)
+            response = requests.post(
+                self.api_url, 
+                headers=self.headers, 
+                json=payload,
+                timeout=30  # 30 second timeout
+            )
             response.raise_for_status()
-            return response.json()
             
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Error querying Hugging Face API: {str(e)}")
+            result = response.json()
+            if not isinstance(result, list) or len(result) == 0:
+                raise ValueError("Invalid response format from Hugging Face API")
+                
+            return result
+            
+        except Timeout:
+            logger.error("Timeout while querying Hugging Face API")
+            raise RequestException("Classification request timed out. Please try again.")
+        except ConnectionError:
+            logger.error("Connection error while querying Hugging Face API")
+            raise RequestException("Failed to connect to classification service. Please check your internet connection.")
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401:
+                logger.error("Authentication failed with Hugging Face API")
+                raise ValueError("Authentication failed. Please check your API token.")
+            elif e.response.status_code == 429:
+                logger.error("Rate limit exceeded for Hugging Face API")
+                raise RequestException("Rate limit exceeded. Please try again later.")
+            else:
+                logger.error(f"HTTP error while querying Hugging Face API: {str(e)}")
+                raise RequestException(f"Classification service error: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error querying Hugging Face API: {str(e)}")
             raise
 
     def aggregate_results(self, window_results: List[Tuple[Dict[str, Any], int, int]]) -> Dict[str, Any]:
@@ -255,7 +312,7 @@ class DocumentClassifier:
         try:
             # Split text into windows with position information
             windows = self.create_sliding_windows(text)
-            logging.info(f"Split document into {len(windows)} windows")
+            logger.info(f"Split document into {len(windows)} windows")
             
             # Classify each window and store results with position info
             window_results = []
@@ -268,7 +325,7 @@ class DocumentClassifier:
             return final_result
             
         except Exception as e:
-            logging.error(f"Error classifying document: {str(e)}")
+            logger.error(f"Error classifying document: {str(e)}")
             raise
 
     def process_document(self, file_content: bytes, file_type: str) -> Dict[str, Any]:
@@ -281,6 +338,11 @@ class DocumentClassifier:
             
         Returns:
             Dictionary containing classification results
+            
+        Raises:
+            ValueError: If file type is not supported or content is invalid
+            IOError: If file cannot be read
+            RequestException: If classification service fails
         """
         try:
             # Extract text from the document
@@ -292,5 +354,5 @@ class DocumentClassifier:
             return results
             
         except Exception as e:
-            logging.error(f"Error processing document: {str(e)}")
+            logger.error(f"Error processing document: {str(e)}")
             raise 

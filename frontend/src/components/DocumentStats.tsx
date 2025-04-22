@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { ChartPie, TrendingUp, FileText } from 'lucide-react';
@@ -8,17 +8,59 @@ const DocumentStats = () => {
   const [stats, setStats] = useState<DocumentStatsType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 3;
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         setLoading(true);
-        const data = await getDocumentStats();
-        setStats(data);
         setError(null);
-      } catch (err) {
-        setError('Failed to fetch document statistics');
+        const data = await getDocumentStats();
+        
+        // Validate data format
+        if (!Array.isArray(data)) {
+          throw new Error('Invalid data format received from server');
+        }
+
+        // Validate each stat entry
+        const validStats = data.filter(stat => {
+          return (
+            typeof stat.classification === 'string' &&
+            typeof stat.confidence === 'number' &&
+            !isNaN(stat.confidence) &&
+            stat.confidence >= 0 &&
+            stat.confidence <= 100
+          );
+        });
+
+        if (validStats.length === 0 && data.length > 0) {
+          throw new Error('No valid statistics data available');
+        }
+
+        setStats(validStats);
+        setRetryCount(0);
+      } catch (err: any) {
+        let errorMessage = 'Failed to fetch document statistics';
+        
+        if (err.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection.';
+        } else if (err.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (err.message.includes('Invalid data format')) {
+          errorMessage = 'Server returned invalid data format. Please try again later.';
+        } else if (err.message.includes('No valid statistics')) {
+          errorMessage = 'No valid statistics data available.';
+        }
+
+        setError(errorMessage);
         console.error('Error fetching stats:', err);
+
+        // Implement retry logic
+        if (retryCount < MAX_RETRIES) {
+          setRetryCount(prev => prev + 1);
+          setTimeout(() => fetchStats(), 2000 * retryCount); // Exponential backoff
+        }
       } finally {
         setLoading(false);
       }
@@ -27,28 +69,74 @@ const DocumentStats = () => {
     fetchStats();
   }, []);
 
-  // Calculate document type distribution
-  const typeDistribution = stats.reduce((acc, doc) => {
-    acc[doc.classification] = (acc[doc.classification] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  // Calculate document type distribution with error handling
+  const typeDistribution = useMemo(() => {
+    try {
+      return stats.reduce((acc, doc) => {
+        if (doc.classification) {
+          acc[doc.classification] = (acc[doc.classification] || 0) + 1;
+        }
+        return acc;
+      }, {} as Record<string, number>);
+    } catch (err) {
+      console.error('Error calculating type distribution:', err);
+      return {};
+    }
+  }, [stats]);
 
-  const distributionData = Object.entries(typeDistribution).map(([classification, count]) => ({
-    classification,
-    count,
-  }));
+  const distributionData = useMemo(() => {
+    try {
+      return Object.entries(typeDistribution).map(([classification, count]) => ({
+        classification,
+        count,
+      }));
+    } catch (err) {
+      console.error('Error formatting distribution data:', err);
+      return [];
+    }
+  }, [typeDistribution]);
 
-  // Calculate average confidence
-  const avgConfidence = stats.length
-    ? stats.reduce((sum, doc) => sum + doc.confidence, 0) / stats.length
-    : 0;
+  // Calculate average confidence with error handling
+  const avgConfidence = useMemo(() => {
+    try {
+      if (stats.length === 0) return 0;
+      const validStats = stats.filter(doc => !isNaN(doc.confidence));
+      if (validStats.length === 0) return 0;
+      return validStats.reduce((sum, doc) => sum + doc.confidence, 0) / validStats.length;
+    } catch (err) {
+      console.error('Error calculating average confidence:', err);
+      return 0;
+    }
+  }, [stats]);
 
   if (loading) {
-    return <div className="flex items-center justify-center p-4">Loading statistics...</div>;
+    return (
+      <div className="flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+        <span className="ml-2">Loading statistics...</span>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="text-red-500 p-4">{error}</div>;
+    return (
+      <div className="text-center p-4">
+        <div className="text-red-500 mb-2">{error}</div>
+        {retryCount < MAX_RETRIES ? (
+          <p className="text-sm text-gray-500">Retrying... ({retryCount}/{MAX_RETRIES})</p>
+        ) : (
+          <button
+            onClick={() => {
+              setRetryCount(0);
+              fetchStats();
+            }}
+            className="text-purple-600 hover:text-purple-800 underline"
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    );
   }
 
   return (

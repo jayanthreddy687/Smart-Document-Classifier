@@ -6,10 +6,17 @@ import os
 from werkzeug.utils import secure_filename
 from botocore.exceptions import ClientError
 import io
+import logging
+from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.exceptions import HTTPException
 
 from database import db, Document
 from config import settings
 from ml_classifier import DocumentClassifier
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
@@ -39,9 +46,30 @@ try:
     # Test the connection
     s3_client.list_buckets()
 except ClientError as e:
-    print(f"Error connecting to AWS S3: {str(e)}")
+    logger.error(f"Error connecting to AWS S3: {str(e)}")
     raise
 
+# Global error handlers
+@app.errorhandler(HTTPException)
+def handle_http_error(error):
+    """Handle HTTP exceptions."""
+    response = {
+        'error': error.description,
+        'status_code': error.code
+    }
+    return jsonify(response), error.code
+
+@app.errorhandler(SQLAlchemyError)
+def handle_db_error(error):
+    """Handle database errors."""
+    logger.error(f"Database error: {str(error)}")
+    return jsonify({'error': 'Database error occurred'}), 500
+
+@app.errorhandler(Exception)
+def handle_generic_error(error):
+    """Handle all other exceptions."""
+    logger.error(f"Unexpected error: {str(error)}")
+    return jsonify({'error': 'An unexpected error occurred'}), 500
 
 @app.route('/categories/', methods=['GET'])
 def get_categories():
@@ -51,7 +79,7 @@ def get_categories():
         return jsonify(categories), 200
     except Exception as e:
         error_message = str(e)
-        print(f"Error getting categories: {error_message}")
+        logger.error(f"Error getting categories: {error_message}")
         return jsonify({'error': error_message}), 500
 
 
@@ -68,15 +96,20 @@ def upload_document():
     allowed_types = ['.txt', '.docx', '.pdf']
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in allowed_types:
-        return jsonify({'error': 'File type not allowed'}), 400
+        return jsonify({'error': f'File type not allowed. Supported types: {", ".join(allowed_types)}'}), 400
+
+    # Validate file size (e.g., 10MB limit)
+    if len(file.read()) > 10 * 1024 * 1024:  # 10MB in bytes
+        return jsonify({'error': 'File size too large. Maximum size is 10MB'}), 400
+    file.seek(0)  # Reset file pointer
 
     try:
         # Read file content
         file_content = file.read()
 
         # Upload to S3
-        s3_key = f"documents/{datetime.now(UTC).timestamp()}_{file.filename}"
-        print(f"Attempting to upload to S3: {s3_key}")
+        s3_key = f"documents/{datetime.now(UTC).timestamp()}_{secure_filename(file.filename)}"
+        logger.info(f"Attempting to upload to S3: {s3_key}")
 
         # Create a new BytesIO object for S3 upload
         file_for_s3 = io.BytesIO(file_content)
@@ -85,21 +118,20 @@ def upload_document():
             settings.AWS_BUCKET_NAME,
             s3_key
         )
-        print(file_for_s3)
         s3_url = f"https://{settings.AWS_BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
-        print(f"Successfully uploaded to S3: {s3_url}")
+        logger.info(f"Successfully uploaded to S3: {s3_url}")
 
         # Classify document using ML
         classification = classifier.process_document(
             file_content,
             file_ext
         )
-        print(
+        logger.info(
             f"Classification: {classification['category']}, Confidence: {classification['confidence']}")
 
         # Create document record
         document = Document(
-            filename=file.filename,
+            filename=secure_filename(file.filename),
             content="",  # You might want to store the extracted text here
             classification=classification['category'],
             confidence=classification['confidence'],
@@ -111,16 +143,19 @@ def upload_document():
         # Include all_scores in the response
         response_data = document.to_dict()
         response_data['all_scores'] = classification['all_scores']
-        print(classification['all_scores'])
         return jsonify(response_data), 201
 
     except ClientError as e:
         error_message = str(e)
-        print(f"AWS S3 Error: {error_message}")
+        logger.error(f"AWS S3 Error: {error_message}")
         return jsonify({'error': f'AWS S3 Error: {error_message}'}), 500
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error(f"Database error: {str(e)}")
+        return jsonify({'error': 'Failed to save document to database'}), 500
     except Exception as e:
         error_message = str(e)
-        print(f"Error: {error_message}")
+        logger.error(f"Error: {error_message}")
         return jsonify({'error': error_message}), 500
 
 
@@ -147,9 +182,13 @@ def get_download_url(document_id):
             'download_url': presigned_url
         }), 200
         
+    except ClientError as e:
+        error_message = str(e)
+        logger.error(f"AWS S3 Error generating download URL: {error_message}")
+        return jsonify({'error': f'AWS S3 Error: {error_message}'}), 500
     except Exception as e:
         error_message = str(e)
-        print(f"Error generating download URL: {error_message}")
+        logger.error(f"Error generating download URL: {error_message}")
         return jsonify({'error': error_message}), 500
 
 
@@ -158,6 +197,12 @@ def get_documents():
     try:
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 10))
+        
+        # Validate pagination parameters
+        if page < 1:
+            return jsonify({'error': 'Page number must be greater than 0'}), 400
+        if limit < 1 or limit > 100:
+            return jsonify({'error': 'Limit must be between 1 and 100'}), 400
         
         # Calculate skip value for pagination
         skip = (page - 1) * limit
@@ -184,9 +229,17 @@ def get_documents():
             'totalPages': total_pages
         }), 200
         
+    except ValueError as e:
+        error_message = str(e)
+        logger.error(f"Invalid pagination parameters: {error_message}")
+        return jsonify({'error': error_message}), 400
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error(f"Database error getting documents: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve documents from database'}), 500
     except Exception as e:
         error_message = str(e)
-        print(f"Error getting documents: {error_message}")
+        logger.error(f"Error getting documents: {error_message}")
         return jsonify({'error': error_message}), 500
 
 
@@ -207,9 +260,13 @@ def get_documents_stats():
             'data': documents_stats
         }), 200
         
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error(f"Database error fetching document stats: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve document statistics from database'}), 500
     except Exception as e:
         error_message = str(e)
-        print(f"Error fetching document stats: {error_message}")
+        logger.error(f"Error fetching document stats: {error_message}")
         return jsonify({'error': error_message}), 500
 
 

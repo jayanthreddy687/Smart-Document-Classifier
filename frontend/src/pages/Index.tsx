@@ -34,8 +34,22 @@ const Index = () => {
       
       setRefreshKey(prev => prev + 1);
       toast.success('Document classified successfully');
-    } catch (error) {
-      toast.error('Failed to classify document');
+    } catch (error: any) {
+      let errorMessage = 'Failed to classify document';
+      
+      if (error.message) {
+        if (error.message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (error.message.includes('file type')) {
+          errorMessage = 'Invalid file type. Please upload a PDF, DOCX, or TXT file.';
+        } else if (error.message.includes('size')) {
+          errorMessage = 'File size too large. Please upload a smaller file.';
+        }
+      }
+      
+      toast.error(errorMessage);
       console.error('Error classifying document:', error);
     } finally {
       setIsClassifying(false);

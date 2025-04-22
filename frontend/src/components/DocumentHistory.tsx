@@ -25,6 +25,8 @@ const DocumentHistory = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 3;
 
   useEffect(() => {
     fetchDocuments();
@@ -33,13 +35,45 @@ const DocumentHistory = () => {
   const fetchDocuments = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      // Validate page number
+      if (currentPage < 1) {
+        setCurrentPage(1);
+        return;
+      }
+
       const response = await getDocuments(currentPage);
+      
+      // Validate response data
+      if (!response || !Array.isArray(response.documents)) {
+        throw new Error('Invalid response format');
+      }
+
       setDocuments(response.documents);
       setTotalPages(response.totalPages);
-      setError(null);
-    } catch (err) {
-      setError('Failed to fetch documents');
+      
+      // Reset retry count on success
+      setRetryCount(0);
+    } catch (err: any) {
+      let errorMessage = 'Failed to fetch documents';
+      
+      if (err.message.includes('network')) {
+        errorMessage = 'Network error. Please check your connection.';
+      } else if (err.message.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else if (err.message.includes('Invalid response format')) {
+        errorMessage = 'Server returned invalid data. Please try again later.';
+      }
+
+      setError(errorMessage);
       console.error('Error fetching documents:', err);
+
+      // Implement retry logic
+      if (retryCount < MAX_RETRIES) {
+        setRetryCount(prev => prev + 1);
+        setTimeout(() => fetchDocuments(), 2000 * retryCount); // Exponential backoff
+      }
     } finally {
       setLoading(false);
     }
@@ -64,6 +98,14 @@ const DocumentHistory = () => {
     }
   };
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) {
+      toast.error('Invalid page number');
+      return;
+    }
+    setCurrentPage(newPage);
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center p-8">Loading...</div>;
   }
@@ -80,7 +122,29 @@ const DocumentHistory = () => {
           <CardTitle className="text-xl font-semibold">Document History</CardTitle>
         </CardHeader>
         <CardContent>
-          {documents.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+              <span className="ml-2">Loading documents...</span>
+            </div>
+          ) : error ? (
+            <div className="text-center p-4">
+              <div className="text-red-500 mb-2">{error}</div>
+              {retryCount < MAX_RETRIES ? (
+                <p className="text-sm text-gray-500">Retrying... ({retryCount}/{MAX_RETRIES})</p>
+              ) : (
+                <button
+                  onClick={() => {
+                    setRetryCount(0);
+                    fetchDocuments();
+                  }}
+                  className="text-purple-600 hover:text-purple-800 underline"
+                >
+                  Try again
+                </button>
+              )}
+            </div>
+          ) : documents.length === 0 ? (
             <p className="text-gray-500 text-center py-4">No documents found.</p>
           ) : (
             <Table>
@@ -117,27 +181,29 @@ const DocumentHistory = () => {
             </Table>
           )}
 
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-            <p className="text-sm text-gray-700">
-              Page {currentPage} of {totalPages}
-            </p>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setCurrentPage(prev => prev - 1)}
-                disabled={currentPage === 1}
-                className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => prev + 1)}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
+          {!error && documents.length > 0 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-sm text-gray-700">
+                Page {currentPage} of {totalPages}
+              </p>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
