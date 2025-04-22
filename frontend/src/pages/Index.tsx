@@ -4,7 +4,7 @@ import ClassificationResult from '../components/ClassificationResult';
 import DocumentHistory from '../components/DocumentHistory';
 import { Button } from '../components/ui/button';
 import { LoadingOverlay } from '../components/ui/loading-overlay';
-import { uploadDocument, getDocuments, Document } from '../lib/api';
+import { uploadDocument} from '../lib/api';
 import { toast } from 'sonner';
 import DocumentStats from '../components/DocumentStats';
 
@@ -44,9 +44,10 @@ const Index = () => {
           errorMessage = 'Request timed out. Please try again.';
         } else if (error.message.includes('file type')) {
           errorMessage = 'Invalid file type. Please upload a PDF, DOCX, or TXT file.';
-        }
-        else if (error.message.includes('empty')) {
+        } else if (error.message.includes('empty')) {
           errorMessage = 'File is empty. Please upload a file with content.';
+        } else if (error.message.includes('Hugging Face API')) {
+          errorMessage = 'Issue with document classification service. Please try again.';
         }
       }
       

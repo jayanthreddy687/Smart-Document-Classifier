@@ -222,25 +222,12 @@ class DocumentClassifier:
                 logger.error(f"Raw response: {response.text[:200]}...")  # Log first 200 chars of response
                 raise ValueError("Failed to parse API response")
             
-        except Timeout:
-            logger.error("Timeout while querying Hugging Face API")
-            raise RequestException("Classification request timed out. Please try again.")
-        except ConnectionError:
-            logger.error("Connection error while querying Hugging Face API")
-            raise RequestException("Failed to connect to classification service. Please check your internet connection.")
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                logger.error("Authentication failed with Hugging Face API")
-                raise ValueError("Authentication failed. Please check your API token.")
-            elif e.response.status_code == 429:
-                logger.error("Rate limit exceeded for Hugging Face API")
-                raise RequestException("Rate limit exceeded. Please try again later.")
-            else:
-                logger.error(f"HTTP error while querying Hugging Face API: {str(e)}")
-                raise RequestException(f"Classification service error: {str(e)}")
+        except (Timeout, ConnectionError, requests.exceptions.HTTPError) as e:
+            logger.error(f"Hugging Face API error: {str(e)}")
+            raise RequestException("Issue with Hugging Face API. Please try again.")
         except Exception as e:
-            logger.error(f"Error querying Hugging Face API: {str(e)}")
-            raise
+            logger.error(f"Unexpected error while querying Hugging Face API: {str(e)}")
+            raise RequestException("Issue with Hugging Face API. Please try again.")
 
     def aggregate_results(self, window_results: List[Tuple[Dict[str, Any], int, int]]) -> Dict[str, Any]:
         """
