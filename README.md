@@ -17,6 +17,18 @@ You can try the application at: [Smart Document Classifier](https://smart-docume
 ![Smart Document Classifier Demo](working.gif)
 
 
+## Features
+
+- Document classification using machine learning
+- Support for multiple document formats (PDF, DOCX, TXT)
+- Real-time classification results
+- Document history tracking
+- Download classified documents
+- Secure file storage using AWS S3
+- Modern, responsive UI with dark mode support
+- Detailed classification statistics and analytics
+
+
 ## Project Structure
 
 ```
@@ -152,3 +164,4 @@ cd Smart-Document-Classifier
 
 ### Authentication
 Currently, the API does not require authentication. However, it requires valid environment variables for AWS and Hugging Face services.
+

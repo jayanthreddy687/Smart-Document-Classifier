@@ -296,24 +296,39 @@ GET /documents/stats
 
 ## Error Handling
 
-### Error Response Format
-All endpoints return errors in the following format:
+The application implements a comprehensive error handling system:
 
+### Backend Error Handling
+- Global error handler for consistent error responses
+- Detailed error logging with timestamps and context
+- Specific error types for different failure scenarios:
+  - Document processing errors
+  - File validation errors
+  - Database errors
+  - Authentication errors
+  - System errors
+
+### Frontend Error Handling
+- User-friendly error messages
+- Toast notifications for immediate feedback
+- Network error handling
+- File validation feedback
+- Loading states and progress indicators
+
+### API Error Response Format
 ```json
 {
-  "error": "Error message description"
+  "error": "Error message",
+  "error_type": "ERROR_TYPE",
+  "details": "Additional error details",
+  "timestamp": "2024-02-14T12:00:00Z"
 }
 ```
 
-### Common Error Messages
-
-| Error Message | Description | HTTP Status |
-|--------------|-------------|-------------|
-| "No file provided" | Missing file in upload request | 400 |
-| "No file selected" | Empty filename in upload request | 400 |
-| "File type not allowed" | Unsupported file format | 400 |
-| "Document not found" | Requested document ID doesn't exist | 404 |
-| "Error connecting to AWS S3" | AWS service issue | 500 |
-| "Error getting categories" | ML model service issue | 500 |
-| "Error generating download URL" | S3 URL generation failed | 500 |
-| "Error fetching document stats" | Statistics retrieval failed | 500 |
+Common error types:
+- `DOCUMENT_PROCESSING_ERROR`: Issues during document classification
+- `FILE_VALIDATION_ERROR`: Invalid file type or size
+- `DATABASE_ERROR`: Database operation failures
+- `AUTHENTICATION_ERROR`: Authentication/authorization issues
+- `SYSTEM_ERROR`: Unexpected system errors
+- `RATE_LIMIT_ERROR`: Too many requests
