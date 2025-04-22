@@ -10,6 +10,9 @@ from config import settings
 import numpy as np
 from collections import Counter
 from requests.exceptions import RequestException, ConnectionError
+import re
+import string
+import unicodedata
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -87,9 +90,7 @@ class DocumentClassifier:
                     text = ''
                     for page in pdf_reader.pages:
                         text += page.extract_text() + ' '
-                    if not text.strip():
-                        raise ValueError("No text content found in PDF")
-                    return text.strip()
+                    return text
                 except Exception as e:
                     logger.error(f"Error reading PDF file: {str(e)}")
                     raise IOError("Failed to read PDF file. Please ensure it is a valid PDF document.")
@@ -314,6 +315,42 @@ class DocumentClassifier:
             'raw_result': window_results
         }
 
+    def preprocess_text(self, text: str) -> str:
+        """
+        Preprocess text before classification.
+        
+        Args:
+            text: Raw text content
+            
+        Returns:
+            Preprocessed text
+        """
+        # Convert to lowercase
+        text = text.lower()
+        
+        # Normalize unicode characters
+        text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
+        
+        # Remove URLs
+        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
+        
+        # Remove email addresses
+        text = re.sub(r'\S+@\S+', '', text)
+        
+        # Replace multiple newlines with single newline
+        text = re.sub(r'\n+', '\n', text)
+        
+        # Replace multiple spaces with single space
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Remove special characters but keep periods, commas, and other important punctuation
+        text = re.sub(r'[^\w\s.,!?;:()\-\'"]', ' ', text)
+        
+        # Remove extra whitespace
+        text = text.strip()
+        
+        return text
+
     def classify_document(self, text: str) -> Dict[str, Any]:
         """
         Classify the document text using the Hugging Face Inference API.
@@ -325,13 +362,17 @@ class DocumentClassifier:
             Dictionary containing classification results
         """
         try:
+            # Preprocess the entire text
+            preprocessed_text = self.preprocess_text(text)
+            
             # Split text into windows with position information
-            windows = self.create_sliding_windows(text)
+            windows = self.create_sliding_windows(preprocessed_text)
             logger.info(f"Split document into {len(windows)} windows")
             
             # Classify each window and store results with position info
             window_results = []
             for window_text, start_pos, end_pos in windows:
+                # Send window text directly to API since it's already preprocessed
                 result = self.query_api(window_text)
                 window_results.append((result, start_pos, end_pos))
             
