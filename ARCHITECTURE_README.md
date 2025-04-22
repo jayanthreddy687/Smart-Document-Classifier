@@ -29,6 +29,7 @@ This document provides detailed information about the RESTful API endpoints avai
    - AWS S3: Document storage
    - Hugging Face: ML model inference
    - Vercel: Frontend deployment
+   - Render: Backend deployment
 
 ### Data Flow
 
