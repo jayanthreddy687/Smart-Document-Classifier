@@ -179,19 +179,48 @@ class DocumentClassifier:
                 }
             }
             
+            # Log the request (without sensitive data)
+            logger.info(f"Making request to Hugging Face API for text of length {len(text)}")
+            
             response = requests.post(
                 self.api_url, 
                 headers=self.headers, 
                 json=payload,
                 timeout=30  # 30 second timeout
             )
+            
+            # Log the response status
+            logger.info(f"Received response with status code: {response.status_code}")
+            
             response.raise_for_status()
             
-            result = response.json()
-            if not isinstance(result, list) or len(result) == 0:
+            try:
+                result = response.json()
+                # Log the response structure (without sensitive data)
+                logger.debug(f"Response type: {type(result)}, Structure: {list(result.keys()) if isinstance(result, dict) else 'list'}")
+                
+                # Handle different response formats
+                if isinstance(result, dict):
+                    if 'sequence' in result and 'labels' in result and 'scores' in result:
+                        # This is the expected format from BART-large-mnli
+                        return {
+                            'labels': result['labels'],
+                            'scores': result['scores']
+                        }
+                    elif 'labels' in result and 'scores' in result:
+                        # Direct format with labels and scores
+                        return result
+                elif isinstance(result, list) and len(result) > 0:
+                    # List format (sometimes returned by the API)
+                    return result[0]
+                
+                logger.error(f"Unexpected response format: {result}")
                 raise ValueError("Invalid response format from Hugging Face API")
                 
-            return result
+            except ValueError as e:
+                logger.error(f"Failed to parse JSON response: {str(e)}")
+                logger.error(f"Raw response: {response.text[:200]}...")  # Log first 200 chars of response
+                raise ValueError("Failed to parse API response")
             
         except Timeout:
             logger.error("Timeout while querying Hugging Face API")
