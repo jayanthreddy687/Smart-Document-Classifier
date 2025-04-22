@@ -149,37 +149,6 @@ cd Smart-Document-Classifier
 - Get API token from [Hugging Face](https://huggingface.co)
 - The token needs inference API access
 
-## API Documentation
-
-The Smart Document Classifier provides a RESTful API for document classification and management.
-
-### Base URL
-```
-http://localhost:5000
-```
 
 ### Authentication
 Currently, the API does not require authentication. However, it requires valid environment variables for AWS and Hugging Face services.
-
-### Endpoints
-
-#### 1. Get Document Categories
-Retrieves the list of available document categories.
-
-```
-GET /categories/
-```
-
-**Response**
-```json
-{
-  "categories": [
-    "Technical Documentation",
-    "Business Proposal",
-    "Legal Document",
-    "Academic Paper",
-    "General Article",
-    "Other"
-  ]
-}
-```
