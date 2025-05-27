@@ -7,12 +7,24 @@ import { LoadingOverlay } from '../components/ui/loading-overlay';
 import { uploadDocument} from '../lib/api';
 import { toast } from 'sonner';
 import DocumentStats from '../components/DocumentStats';
+import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isClassifying, setIsClassifying] = useState(false);
   const [result, setResult] = useState<{ category: string; allScores: Record<string, number> } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const element = document.querySelector(hash);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, []);
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
@@ -60,8 +72,8 @@ const Index = () => {
 
   return (
     <>
+      <Navbar />
       {isClassifying && <LoadingOverlay message="Classifying document..." />}
-      
       <div className="min-h-screen bg-gradient-to-br from-[#E5DEFF] via-[#F1F0FB] to-[#D3E4FD] py-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="absolute inset-0 bg-white/30 backdrop-blur-sm rounded-xl -z-10"></div>
@@ -92,12 +104,17 @@ const Index = () => {
 
             {result && <ClassificationResult {...result} />}
 
-            <DocumentStats key={`stats-${refreshKey}`} />
+            <div id="Statistics">
+              <DocumentStats key={`stats-${refreshKey}`} />
+            </div>
 
-            <DocumentHistory key={`history-${refreshKey}`} />
+            <div id="history">
+              <DocumentHistory key={`history-${refreshKey}`} />
+            </div>
           </div>
         </div>
       </div>
+      <Footer />
     </>
   );
 };
